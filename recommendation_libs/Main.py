@@ -26,6 +26,6 @@ if __name__ == "__main__":
     users_data = loader.loadUUser()
     items_to_genres_matrix = collFiltering.itemsGenresMatrix()
     ratings_matrix = collFiltering.ratingsMatrix(loader.loadUData())
-    predictions = collFiltering.getPredictions(ratings_matrix, 3)
+    predictions = collFiltering.getPredictionsForUser(ratings_matrix, 3)
     print predictions
     print recommend(predictions)

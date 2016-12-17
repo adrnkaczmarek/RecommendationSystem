@@ -2,10 +2,11 @@ import numpy as np
 import math
 from LoadingData import Loader
 
-
 class CollaborativeFiltering(object):
 
     loader = Loader()
+
+    _
 
     def getUsersIds(self, udata):
         users_ids = set()
@@ -76,7 +77,7 @@ class CollaborativeFiltering(object):
         content_array_to_return = np.matrix(array)
         return content_array_to_return
 
-    def getPredictions(self, matrix, user):
+    def getPredictionsForUser(self, matrix, user):
         not_rated = []
         rated = []
         predictions = []
@@ -103,3 +104,16 @@ class CollaborativeFiltering(object):
             predictions.append({'id': item[0], 'value': counter / denominator})
 
         return predictions
+
+    def getPredictions(self, matrix):
+        result = np.array(matrix)
+
+        for i in range(len(matrix[0])):
+            userId = i
+            predictions = self.getPredictionsForUser(matrix, userId)
+
+            for j in range(len(predictions)):
+                movieId = predictions[j]['id']
+                result[movieId][userId] = predictions[j]['value']
+
+        return result
