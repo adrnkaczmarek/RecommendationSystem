@@ -6,8 +6,6 @@ class CollaborativeFiltering(object):
 
     loader = Loader()
 
-    _
-
     def getUsersIds(self, udata):
         users_ids = set()
 
@@ -29,7 +27,7 @@ class CollaborativeFiltering(object):
         second_to_return = []
 
         for index in range(len(first)):
-            if first[index] > 0 and second[index] > 0:
+            if first[index] != 0 and second[index] != 0:
                 first_to_return.append(first[index])
                 second_to_return.append(second[index])
 
@@ -37,18 +35,22 @@ class CollaborativeFiltering(object):
 
     def cosineSimilarity(self, first, second):
 
-        first, second = self.commonIndexes(first, second)
+        first_common, second_common = self.commonIndexes(first, second)
         numerator = 0
         denominator1 = 0
         denominator2 = 0
+        result = -1
 
-        for index in range(len(first)):
-            numerator += first[index] * second[index]
-            denominator1 += math.pow(first[index], 2)
-            denominator2 += math.pow(second[index], 2)
+        if len(first_common) > 0 and len(second_common) > 0:
+            for index in range(len(first_common)):
+                numerator += first_common[index] * second_common[index]
+                denominator1 += math.pow(first_common[index], 2)
+                denominator2 += math.pow(second_common[index], 2)
 
-        denominator = (math.sqrt(denominator1) * math.sqrt(denominator2))
-        return numerator / denominator
+            denominator = (math.sqrt(denominator1) * math.sqrt(denominator2))
+            result = numerator / denominator
+
+        return result
 
     def ratingsMatrix(self, udata):
         users = self.getUsersIds(udata)
