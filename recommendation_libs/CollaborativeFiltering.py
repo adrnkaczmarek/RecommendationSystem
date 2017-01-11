@@ -1,51 +1,12 @@
 import numpy as np
 import math
-from LoadingData import Loader
-
-class RecSystem(object):
-
-    def __init__(self, trainSet):
-        self.predictor = CollaborativeFiltering(trainSet)
-
-    def getQueryFloatResult(self, queryTuple):
-        user = int(queryTuple[0])
-        item = int(queryTuple[1])
-        return self.processedDataRepresentation[item][user]
-
-    def getMultiQueryFloatResults(self, queryTuplesList):
-        multiQueryFloatResults = {}
-        for tempQueryTuple in queryTuplesList:
-            multiQueryFloatResults[tempQueryTuple] = self.getQueryFloatResult(tempQueryTuple)
-        return multiQueryFloatResults
-
-    def processInputArray(self):
-        self.processedDataRepresentation = self.predictor.getPredictions()
-        self.inputDataProcessed = True
 
 class CollaborativeFiltering(object):
-
-    loader = Loader()
 
     def __init__(self, trainSet):
         self.trainSet = trainSet
 
-    def getUsersIds(self, udata):
-        users_ids = set()
-
-        for elem in udata:
-            users_ids.add(elem[0])
-
-        return users_ids
-
-    def getMoviesIds(self, udata):
-        movies_ids = set()
-
-        for elem in udata:
-            movies_ids.add(elem[1])
-
-        return movies_ids
-
-    def commonIndexes(self, first, second):
+    def __commonIndexes(self, first, second):
         first_to_return = []
         second_to_return = []
 
@@ -57,7 +18,7 @@ class CollaborativeFiltering(object):
 
         return first_to_return, second_to_return
 
-    def getMostSimilar(self, vector):
+    def __getMostSimilar(self, vector):
         sum = 0
 
         for (id, similarity) in vector:
@@ -72,9 +33,9 @@ class CollaborativeFiltering(object):
 
         return toReturn
 
-    def cosineSimilarity(self, first, second):
+    def __cosineSimilarity(self, first, second):
 
-        first_common, second_common = self.commonIndexes(first, second)
+        first_common, second_common = self.__commonIndexes(first, second)
         numerator = 0
         denominator1 = 0
         denominator2 = 0
@@ -91,41 +52,7 @@ class CollaborativeFiltering(object):
 
         return result
 
-    def ratingsMatrix(self, udata):
-        users = self.getUsersIds(udata)
-        movies = self.getMoviesIds(udata)
-        ratings_matrix = np.zeros((len(movies), len(users)))
-
-        for row in udata:
-            ratings_matrix[int(row[1]) - 1, int(row[0]) - 1] = row[2]
-
-        return ratings_matrix
-
-    def getPrediction(self, userId, itemId):
-        rated = []
-        item = self.trainSet[itemId]
-
-        for index in range(len(self.trainSet)):
-            if self.trainSet[index][userId] != 0:
-                rated.append((index, self.trainSet[index]))
-
-        counter = 0.0
-        denominator = 0.0
-
-        similarities = []
-
-        for item_rated in rated:
-            similarities.append((item_rated[0], self.cosineSimilarity(item, item_rated[1])))
-
-        similarities = self.getMostSimilar(similarities)
-
-        for index in range(len(similarities)):
-            counter += similarities[index][1] * rated[index][1][userId]
-            denominator += math.fabs(similarities[index][1])
-
-        return counter / denominator
-
-    def getPredictionsForUser(self, matrix, user):
+    def __getPredictionsForUser(self, matrix, user):
         not_rated = []
         rated = []
         predictions = []
@@ -139,15 +66,13 @@ class CollaborativeFiltering(object):
         counter = 0.0
         denominator = 0.0
 
-        #neighbours = int(math.ceil(float(len(rated))/1.5))
-
         for item in not_rated:
             similarities = []
 
             for item_rated in rated:
-                similarities.append((item_rated[0], self.cosineSimilarity(item[1], item_rated[1])))
+                similarities.append((item_rated[0], self.__cosineSimilarity(item[1], item_rated[1])))
 
-            similarities = self.getMostSimilar(similarities)
+            similarities = self.__getMostSimilar(similarities)
 
             for index in range(len(similarities)):
                 counter += similarities[index][1] * rated[index][1][user]
@@ -163,10 +88,99 @@ class CollaborativeFiltering(object):
 
         for i in range(len(self.trainSet[0])):
             userId = i
-            predictions = self.getPredictionsForUser(self.trainSet, userId)
+            predictions = self.__getPredictionsForUser(self.trainSet, userId)
 
             for j in range(len(predictions)):
                 movieId = predictions[j]['id']
                 result[movieId][userId] = predictions[j]['value']
 
         return result
+
+    def getPredictionsWithVotesCounter(self):
+        self.trainSet = self.trainSet[1:, 1:]
+        result = np.array(self.trainSet)
+        vote_count, min, max, avg = self.__getVoteCountsForDataSet()
+        mid = max - min
+        max -= mid
+        min -= mid
+
+        for i in range(len(self.trainSet[0])):
+            userId = i
+            predictions = self.__getPredictionsForUser(self.trainSet, userId)
+            predictions = self.__addVoteCountModifierLogFunc(predictions, vote_count, min, max)
+
+            for j in range(len(predictions)):
+                movieId = predictions[j]['id']
+                result[movieId][userId] = predictions[j]['value']
+
+        return result
+
+    def getPredictionsWithVotesCounterSimpleScale(self):
+        self.trainSet = self.trainSet[1:, 1:]
+        result = np.array(self.trainSet)
+        vote_count, min, max, avg = self.__getVoteCountsForDataSet()
+        mid = max - min
+        max -= mid
+        min -= mid
+
+        for i in range(len(self.trainSet[0])):
+            userId = i
+            predictions = self.__getPredictionsForUser(self.trainSet, userId)
+            predictions = self.__addVoteCountModifierSimple(predictions, vote_count, min, max)
+
+            for j in range(len(predictions)):
+                movieId = predictions[j]['id']
+                result[movieId][userId] = predictions[j]['value']
+
+        return result
+
+    def __addVoteCountModifierLogFunc(self, predictions, vote_count, min, max):
+        for index in range(len(predictions)):
+            toAdd = self.__sigmoid(self.__rescaleValueForExpFunc(min, max, vote_count[predictions[index]['id']])) - 0.5
+            predictions[index]['value'] += toAdd/10
+
+        return predictions
+
+    def __addVoteCountModifierSimple(self, predictions, vote_count, min, max):
+        for index in range(len(predictions)):
+            toAdd = self.__simpleRescale(min, max, vote_count[predictions[index]['id']]) - 0.5
+            predictions[index]['value'] += toAdd/10
+
+        return predictions
+
+    def __simpleRescale(self, min, max, value):
+        return 1.0/(max-min) * (value - max) + 1
+
+    def __rescaleValueForExpFunc(self, min, max, value):
+        return 10.0/(max-min) * (value - max) + 5
+
+    def __getVoteCountsForDataSet(self):
+        vote_count = []
+        max = 0
+        sum = 0
+        avg = 0
+
+        for item in self.trainSet:
+            counter = 0
+            for val in item:
+                if val != 0:
+                    counter += 1
+
+            if counter > max:
+                max = counter
+
+            vote_count.append(counter)
+
+        min = vote_count[0]
+
+        for vote in vote_count:
+            if vote < min:
+                min = vote
+            sum += vote
+
+        avg = float(sum)/len(vote_count)
+
+        return vote_count, min, max, avg
+
+    def __sigmoid(self, x):
+        return 1 / (1 + math.exp(-x))
